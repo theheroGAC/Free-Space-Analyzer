@@ -52,7 +52,7 @@ target_link_libraries(${PROJECT_NAME}
   jpeg
   z
   freetype
-  m  # math library deve essere ultima
+  m  
 )
 
 # Flags per mksfoex
@@ -68,7 +68,7 @@ vita_create_vpk(
   ${PROJECT_NAME}.self
   VERSION ${VITA_VERSION}
   NAME "${VITA_APP_NAME}"
-  FILE assets/reihen.png assets/reihen.png           # aggiungi il PNG dello splash
+  FILE assets/reihen.png assets/reihen.png           
   FILE assets/sce_sys/icon0.png sce_sys/icon0.png
   FILE assets/sce_sys/livearea/contents/template.xml sce_sys/livearea/contents/template.xml
   FILE assets/sce_sys/livearea/contents/bg.png sce_sys/livearea/contents/bg.png
