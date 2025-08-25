@@ -18,7 +18,7 @@ void ui_init() {
     g_font = vita2d_load_default_pgf();
     
     // Carica lo splash screen
-    splash_tex = vita2d_load_PNG_file("app0:/assets/reihen.png"); // percorso corretto
+    splash_tex = vita2d_load_PNG_file("app0:/assets/reihen.png"); // FIX SPLASH SCREEN
 }
 
 void ui_deinit() {
