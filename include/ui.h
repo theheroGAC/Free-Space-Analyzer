@@ -11,13 +11,14 @@ void ui_init();
 void ui_deinit();
 void ui_show_splash(int duration_ms);
 
-// Main draw (kept identical to your original signature)
-void ui_draw(const PartitionInfo* parts, int parts_count, int current_index,
-             const FolderUsage* top, int top_count,
+// Aggiornata con current_folder_index per D-Pad scroll
+void ui_draw(const PartitionInfo* parts, int parts_count, int current_part_index,
+             const FolderUsage* folders, int folders_count,
              int battery_percent, int fps,
-             float calc_alpha);
+             float calc_alpha,
+             int current_folder_index);
 
-// NEW (optional): set a short label for the active filter shown in the top bar
+// Setta il filtro attivo visualizzato nella barra
 void ui_set_filter_label(const char* label);
 
 #ifdef __cplusplus
