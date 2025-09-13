@@ -31,11 +31,15 @@ static inline uint32_t COL(uint8_t r, uint8_t g, uint8_t b, uint8_t a) { return 
 
 // Color for filter label
 static uint32_t color_for_filter_label(void) {
-    if (strcasecmp(g_filter_label, "Games") == 0) return COL(230, 90, 90, 255);
-    if (strcasecmp(g_filter_label, "MP3") == 0)   return COL(90, 220, 120, 255);
-    if (strcasecmp(g_filter_label, "OGG") == 0)   return COL(120, 220, 255, 255);
-    if (strcasecmp(g_filter_label, "Photo") == 0) return COL(255, 170, 90, 255);
-    if (strcasecmp(g_filter_label, "Video") == 0) return COL(200, 120, 255, 255);
+    if (strcasecmp(g_filter_label, "Games") == 0)    return COL(230, 90, 90, 255);
+    if (strcasecmp(g_filter_label, "MP3") == 0)      return COL(90, 220, 120, 255);
+    if (strcasecmp(g_filter_label, "OGG") == 0)      return COL(120, 220, 255, 255);
+    if (strcasecmp(g_filter_label, "Photo") == 0)    return COL(255, 170, 90, 255);
+    if (strcasecmp(g_filter_label, "Video") == 0)    return COL(200, 120, 255, 255);
+    if (strcasecmp(g_filter_label, "Docs") == 0)     return COL(255, 220, 120, 255);
+    if (strcasecmp(g_filter_label, "Archives") == 0) return COL(180, 130, 255, 255);
+    if (strcasecmp(g_filter_label, "Homebrew") == 0) return COL(255, 100, 180, 255);
+    if (strcasecmp(g_filter_label, "SaveData") == 0) return COL(100, 180, 255, 255);
     return COL(90, 190, 90, 255);
 }
 
@@ -254,4 +258,3 @@ void ui_draw(const PartitionInfo* parts, int parts_count, int current_part_index
     vita2d_end_drawing();
     vita2d_swap_buffers();
 }
-

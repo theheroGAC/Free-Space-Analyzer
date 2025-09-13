@@ -1,6 +1,5 @@
 #pragma once
 #include <stdint.h>
-#pragma once
 #include "fs_analyzer.h" // PartitionInfo and FolderUsage are defined here
 #include <vita2d.h>
 

@@ -2,6 +2,8 @@
 #include <psp2/ctrl.h>
 #include <psp2/power.h>
 #include <psp2/rtc.h>
+#include <psp2/io/stat.h>
+#include <psp2/io/dirent.h>
 #include <vita2d.h>
 #include <stdio.h>
 #include <string.h>
@@ -11,16 +13,27 @@
 #define STICK_THRESHOLD 80
 #define MOVE_DELAY 10
 #define CALCULATING_DELAY_MS 300
+#define MAX_PATH_LEN 512
 
-typedef enum { F_ALL=0, F_GAMES, F_MP3, F_OGG, F_PHOTO, F_VIDEO, F__COUNT } Filter;
+// ---- Breadcrumb navigation ----
+typedef struct {
+    char paths[16][MAX_PATH_LEN];
+    int depth;
+} Breadcrumb;
+
+typedef enum { F_ALL=0, F_GAMES, F_MP3, F_OGG, F_PHOTO, F_VIDEO, F_DOCS, F_ARCHIVES, F_HOMEBREW, F_SAVEDATA, F__COUNT } Filter;
 
 // File extensions mapping
-static const char* EXT_ALL[]   = { NULL };
-static const char* EXT_GAMES[] = { ".iso",".cso",".pbp",".bin",NULL };
-static const char* EXT_MP3[]   = { ".mp3", NULL };
-static const char* EXT_OGG[]   = { ".ogg", NULL };
-static const char* EXT_PHOTO[] = { ".jpg",".jpeg",NULL };
-static const char* EXT_VIDEO[] = { ".mp4", NULL };
+static const char* EXT_ALL[]      = { NULL };
+static const char* EXT_GAMES[]    = { ".iso",".cso",".pbp",".bin",NULL };
+static const char* EXT_MP3[]      = { ".mp3", NULL };
+static const char* EXT_OGG[]      = { ".ogg", NULL };
+static const char* EXT_PHOTO[]    = { ".jpg",".jpeg",".png",".bmp",".gif",NULL };
+static const char* EXT_VIDEO[]    = { ".mp4",".avi",".mkv",".mov",NULL };
+static const char* EXT_DOCS[]     = { ".txt",".pdf",".doc",".docx",".rtf",NULL };
+static const char* EXT_ARCHIVES[] = { ".zip",".rar",".7z",".tar",".gz",NULL };
+static const char* EXT_HOMEBREW[] = { ".vpk",".self",".suprx",".skprx",NULL };
+static const char* EXT_SAVEDATA[] = { ".sav",".dat",".save",NULL };
 
 static const char** filter_to_ext(Filter f) {
     switch(f){
@@ -29,6 +42,10 @@ static const char** filter_to_ext(Filter f) {
         case F_OGG: return EXT_OGG;
         case F_PHOTO: return EXT_PHOTO;
         case F_VIDEO: return EXT_VIDEO;
+        case F_DOCS: return EXT_DOCS;
+        case F_ARCHIVES: return EXT_ARCHIVES;
+        case F_HOMEBREW: return EXT_HOMEBREW;
+        case F_SAVEDATA: return EXT_SAVEDATA;
         default: return EXT_ALL;
     }
 }
@@ -40,11 +57,46 @@ static const char* filter_to_label(Filter f) {
         case F_OGG: return "OGG";
         case F_PHOTO: return "Photo";
         case F_VIDEO: return "Video";
+        case F_DOCS: return "Docs";
+        case F_ARCHIVES: return "Archives";
+        case F_HOMEBREW: return "Homebrew";
+        case F_SAVEDATA: return "SaveData";
         default: return "All";
     }
 }
 
 static int ext_array_count(const char** arr){ int n=0; while(arr&&arr[n])++n; return n; }
+
+// ---- Breadcrumb navigation functions ----
+static int breadcrumb_init(Breadcrumb* bc, const char* initial_path) {
+    if (!bc) return -1;
+    bc->depth = 0;
+    if (initial_path) {
+        strncpy(bc->paths[0], initial_path, MAX_PATH_LEN - 1);
+        bc->paths[0][MAX_PATH_LEN - 1] = '\0';
+        bc->depth = 1;
+    }
+    return 0;
+}
+
+static int breadcrumb_push(Breadcrumb* bc, const char* path) {
+    if (!bc || !path || bc->depth >= 15) return -1;
+    strncpy(bc->paths[bc->depth], path, MAX_PATH_LEN - 1);
+    bc->paths[bc->depth][MAX_PATH_LEN - 1] = '\0';
+    bc->depth++;
+    return 0;
+}
+
+static int breadcrumb_pop(Breadcrumb* bc) {
+    if (!bc || bc->depth <= 1) return -1;
+    bc->depth--;
+    return 0;
+}
+
+static const char* breadcrumb_current(Breadcrumb* bc) {
+    if (!bc || bc->depth <= 0) return "ux0:/";
+    return bc->paths[bc->depth - 1];
+}
 
 // ---- FPS calculation ----
 static uint64_t prev_time = 0;
@@ -80,15 +132,25 @@ int main(int argc, char* argv[]) {
     int current_part = 0;
     int current_folder = 0;
 
-    if(parts_count>0){
-        top_count = fs_top_entries_in_root(parts[current_part].path, top, 128);
+    // Navigation state - always initialize
+    Breadcrumb breadcrumb;
+    memset(&breadcrumb, 0, sizeof(breadcrumb)); // Initialize to zero
+    
+    if(parts_count > 0) {
+        breadcrumb_init(&breadcrumb, parts[current_part].path);
+        const char* current_path = breadcrumb_current(&breadcrumb);
+        // Use the new scan_directory function instead of fs_top_entries_in_root
+        top_count = fs_scan_directory(current_path, top, 128);
         if(top_count<0) top_count=0;
+    } else {
+        // Fallback if no partitions detected
+        breadcrumb_init(&breadcrumb, "ux0:/");
     }
 
     int running = 1, move_delay = 0, calculating = 0;
     int overlay_active = 0, overlay_sel = 0;
 
-    const char* overlay_labels[F__COUNT] = { "All", "Games", "MP3", "OGG", "Photo", "Video" };
+    const char* overlay_labels[F__COUNT] = { "All", "Games", "MP3", "OGG", "Photo", "Video", "Docs", "Archives", "Homebrew", "SaveData" };
 
     SceCtrlData pad, old_pad={0};
     SceRtcTick last_switch_time;
@@ -122,6 +184,9 @@ int main(int argc, char* argv[]) {
             }
         } else {
             if(move_delay>0) move_delay--;
+            
+            const char* current_path = breadcrumb_current(&breadcrumb);
+            
             if(move_delay==0){
                 if(pad.ly<128-STICK_THRESHOLD){ 
                     current_part=(current_part-1+parts_count)%parts_count; 
@@ -129,6 +194,8 @@ int main(int argc, char* argv[]) {
                     calculating=1; 
                     sceRtcGetCurrentTick(&last_switch_time);
                     current_folder=0;
+                    // Reset breadcrumb to new partition
+                    breadcrumb_init(&breadcrumb, parts[current_part].path);
                 }
                 if(pad.ly>128+STICK_THRESHOLD){ 
                     current_part=(current_part+1)%parts_count; 
@@ -136,11 +203,40 @@ int main(int argc, char* argv[]) {
                     calculating=1; 
                     sceRtcGetCurrentTick(&last_switch_time);
                     current_folder=0;
+                    // Reset breadcrumb to new partition
+                    breadcrumb_init(&breadcrumb, parts[current_part].path);
                 }
             }
 
             if(pressed & SCE_CTRL_UP){ if(current_folder>0) current_folder--; }
             if(pressed & SCE_CTRL_DOWN){ if(current_folder<top_count-1) current_folder++; }
+            
+            // Enter directory with CROSS
+            if(pressed & SCE_CTRL_CROSS && current_folder < top_count) {
+                const char* entry_name = top[current_folder].name;
+                char new_path[MAX_PATH_LEN];
+                fs_build_path(current_path, entry_name, new_path, sizeof(new_path));
+                
+                // Check if it's a directory (either ends with '/' OR fs_is_directory returns true)
+                int is_dir = (entry_name[strlen(entry_name)-1] == '/') || fs_is_directory(new_path);
+                
+                if (is_dir) {
+                    breadcrumb_push(&breadcrumb, new_path);
+                    calculating = 1;
+                    sceRtcGetCurrentTick(&last_switch_time);
+                    current_folder = 0;
+                }
+            }
+            
+            // Go back with CIRCLE (if not at root)
+            if(pressed & SCE_CTRL_CIRCLE) {
+                if (breadcrumb.depth > 1) {
+                    breadcrumb_pop(&breadcrumb);
+                    calculating = 1;
+                    sceRtcGetCurrentTick(&last_switch_time);
+                    current_folder = 0;
+                }
+            }
 
             if(pressed & SCE_CTRL_TRIANGLE) running = 0;
         }
@@ -153,12 +249,13 @@ int main(int argc, char* argv[]) {
         sceRtcGetCurrentTick(&now);
         uint64_t ms_diff = (now.tick - last_switch_time.tick)/1000ULL;
         if(calculating && ms_diff>=CALCULATING_DELAY_MS){
+            const char* current_path = breadcrumb_current(&breadcrumb);
             if(cur_filter==F_ALL){
-                top_count = fs_top_entries_in_root(parts[current_part].path, top, 128);
+                top_count = fs_scan_directory(current_path, top, 128);
                 if(top_count<0) top_count=0;
             } else {
                 const char** exts=filter_to_ext(cur_filter);
-                uint64_t filtered_size = fs_size_by_extension(parts[current_part].path, exts, ext_array_count(exts));
+                uint64_t filtered_size = fs_size_by_extension(current_path, exts, ext_array_count(exts));
                 snprintf(top[0].name,sizeof(top[0].name),"%s total",filter_to_label(cur_filter));
                 top[0].size_bytes=filtered_size;
                 top_count=1;

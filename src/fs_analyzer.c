@@ -172,3 +172,86 @@ void format_bytes(uint64_t bytes, char* out, int outsz)
     while (val >= 1024.0 && u < 4) { val /= 1024.0; ++u; }
     snprintf(out, outsz, u >= 2 ? "%.2f %s" : "%.0f %s", val, units[u]);
 }
+
+// ---- Navigation functions ----
+int fs_is_directory(const char* path)
+{
+    if (!path) return 0;
+    SceIoStat st;
+    memset(&st, 0, sizeof(st));
+    int result = sceIoGetstat(path, &st);
+    if (result < 0) return 0;
+    return SCE_S_ISDIR(st.st_mode);
+}
+
+int fs_scan_directory(const char* full_path, FolderUsage* out, int max_items)
+{
+    if (!full_path || !out || max_items <= 0) return -1;
+
+    SceUID dfd = sceIoDopen(full_path);
+    if (dfd < 0) return -1;
+
+    FolderUsage tmp[128];
+    int count = 0;
+
+    SceIoDirent de;
+    memset(&de, 0, sizeof(de));
+    while (sceIoDread(dfd, &de) > 0 && count < 128) {
+        if (!strcmp(de.d_name, ".") || !strcmp(de.d_name, "..")) {
+            memset(&de, 0, sizeof(de));
+            continue;
+        }
+        
+        char child[1024];
+        snprintf(child, sizeof(child), "%s%s%s", full_path, 
+                 (full_path[strlen(full_path)-1]=='/')? "":"/", de.d_name);
+        
+        FolderUsage fu;
+        memset(&fu, 0, sizeof(fu));
+        snprintf(fu.name, sizeof(fu.name), "%s%s", de.d_name, 
+                 SCE_S_ISDIR(de.d_stat.st_mode) ? "/" : "");
+        
+        if (SCE_S_ISDIR(de.d_stat.st_mode)) {
+            fu.size_bytes = accumulate_path_size(child, 0, NULL, 0);
+        } else {
+            fu.size_bytes = de.d_stat.st_size;
+        }
+        
+        tmp[count++] = fu;
+        memset(&de, 0, sizeof(de));
+    }
+    sceIoDclose(dfd);
+
+    // Sort by size desc
+    for (int i = 0; i < count; ++i) {
+        for (int j = i+1; j < count; ++j) {
+            if (tmp[j].size_bytes > tmp[i].size_bytes) {
+                FolderUsage t = tmp[i];
+                tmp[i] = tmp[j];
+                tmp[j] = t;
+            }
+        }
+    }
+
+    int outn = (count < max_items) ? count : max_items;
+    for (int i = 0; i < outn; ++i) out[i] = tmp[i];
+    return outn;
+}
+
+void fs_build_path(const char* current_path, const char* entry_name, char* out_path, int max_len)
+{
+    if (!current_path || !entry_name || !out_path || max_len <= 0) return;
+    
+    // Remove trailing slash from entry_name if it's a directory marker
+    char clean_entry[256];
+    strncpy(clean_entry, entry_name, sizeof(clean_entry) - 1);
+    clean_entry[sizeof(clean_entry) - 1] = '\0';
+    int len = strlen(clean_entry);
+    if (len > 0 && clean_entry[len - 1] == '/') {
+        clean_entry[len - 1] = '\0';
+    }
+    
+    snprintf(out_path, max_len, "%s%s%s", current_path,
+             (current_path[strlen(current_path)-1] == '/') ? "" : "/",
+             clean_entry);
+}
