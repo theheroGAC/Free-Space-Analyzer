@@ -8,15 +8,31 @@ Displays usage bars, top folders, battery/FPS info, and shows a custom splash sc
 
 ---
 
-## ✨ Features
+##  Features
 - Detects and lists all Vita partitions (`ux0`, `ur0`, `uma0`, etc.)  
 - Visual usage bar (used vs free space)  
 - Shows top folders/files in the selected partition  
 - Battery level and FPS indicator  
 - Custom splash screen (`reihen.png`)  
-- Navigation:  
-  - **Stick Up/Down** → Change partition  
-  - **X** → Exit  
+##  Controls
+
+### **Main Navigation**
+- **Left Stick Up/Down** → Change partition (ux0, ur0, uma0, etc.)
+- **D-Pad Up/Down** → Navigate through folders/files in current partition
+- **X Button** → Enter selected folder
+- **O Button** → Go back to parent folder
+- **Square Button** → Open filter menu (All, Games, MP3, OGG, Photo, Video, Docs, Archives, Homebrew, SaveData)
+- **Triangle Button** → Exit application
+- **R Trigger** → Delete selected file/folder (with confirmation dialog)
+
+### **Filter Menu (when opened with Square)**
+- **D-Pad Up/Down** → Navigate filter options
+- **X Button** → Select filter and apply
+- **O Button** → Cancel and close menu
+
+### **Delete Confirmation Dialog**
+- **X Button** → Confirm deletion (Yes)
+- **O Button** → Cancel deletion (No)
 
 ---
 

@@ -144,7 +144,6 @@ int fs_top_entries_in_root(const char* root_path, FolderUsage* out, int max_item
     }
     sceIoDclose(dfd);
 
-    // sort by size desc
     for (int i = 0; i < count; ++i) {
         for (int j = i+1; j < count; ++j) {
             if (tmp[j].size_bytes > tmp[i].size_bytes) {
@@ -222,7 +221,6 @@ int fs_scan_directory(const char* full_path, FolderUsage* out, int max_items)
     }
     sceIoDclose(dfd);
 
-    // Sort by size desc
     for (int i = 0; i < count; ++i) {
         for (int j = i+1; j < count; ++j) {
             if (tmp[j].size_bytes > tmp[i].size_bytes) {
@@ -241,7 +239,7 @@ int fs_scan_directory(const char* full_path, FolderUsage* out, int max_items)
 void fs_build_path(const char* current_path, const char* entry_name, char* out_path, int max_len)
 {
     if (!current_path || !entry_name || !out_path || max_len <= 0) return;
-    
+
     // Remove trailing slash from entry_name if it's a directory marker
     char clean_entry[256];
     strncpy(clean_entry, entry_name, sizeof(clean_entry) - 1);
@@ -250,8 +248,51 @@ void fs_build_path(const char* current_path, const char* entry_name, char* out_p
     if (len > 0 && clean_entry[len - 1] == '/') {
         clean_entry[len - 1] = '\0';
     }
-    
+
     snprintf(out_path, max_len, "%s%s%s", current_path,
              (current_path[strlen(current_path)-1] == '/') ? "" : "/",
              clean_entry);
+}
+
+// Recursive delete helper
+static int recursive_delete(const char* path, int depth)
+{
+    if (depth > 16) return -1; 
+
+    SceIoStat st;
+    memset(&st, 0, sizeof(st));
+    if (sceIoGetstat(path, &st) < 0) return -1;
+
+    if (SCE_S_ISDIR(st.st_mode)) {
+        SceUID dfd = sceIoDopen(path);
+        if (dfd < 0) return -1;
+
+        SceIoDirent de;
+        memset(&de, 0, sizeof(de));
+        while (sceIoDread(dfd, &de) > 0) {
+            if (!strcmp(de.d_name, ".") || !strcmp(de.d_name, "..")) {
+                memset(&de, 0, sizeof(de));
+                continue;
+            }
+            char child[1024];
+            snprintf(child, sizeof(child), "%s%s%s", path,
+                     (path[strlen(path)-1]=='/')? "":"/", de.d_name);
+            int res = recursive_delete(child, depth + 1);
+            if (res < 0) {
+                sceIoDclose(dfd);
+                return res;
+            }
+            memset(&de, 0, sizeof(de));
+        }
+        sceIoDclose(dfd);
+        return sceIoRmdir(path);
+    } else {
+        return sceIoRemove(path);
+    }
+}
+
+int fs_delete_entry(const char* path)
+{
+    if (!path) return -1;
+    return recursive_delete(path, 0);
 }
